@@ -1,0 +1,1687 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MSGNav 零样本具身导航 - 科研汇报</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1a365d;
+      --primary-light: #2c5282;
+      --primary-dark: #0d1b2a;
+      --accent: #e07b39;
+      --accent-light: #f6ad55;
+      --bg-light: #f7fafc;
+      --bg-white: #ffffff;
+      --text-dark: #1a202c;
+      --text-gray: #4a5568;
+      --text-light: #718096;
+      --border: #e2e8f0;
+      --success: #38a169;
+      --warning: #d69e2e;
+      --error: #e53e3e;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      font-family: 'Noto Sans SC', sans-serif;
+      background: var(--bg-dark, #0f172a);
+      color: var(--text-dark);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    .presentation {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      background: var(--bg-white);
+      padding: 60px 80px;
+      opacity: 0;
+      transform: translateX(50px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    .slide.active {
+      display: flex;
+      flex-direction: column;
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .slide-header {
+      border-bottom: 3px solid var(--primary);
+      padding-bottom: 20px;
+      margin-bottom: 40px;
+    }
+
+    .slide-title {
+      font-family: 'Noto Serif SC', serif;
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: 2px;
+    }
+
+    .slide-subtitle {
+      font-size: 1rem;
+      color: var(--text-light);
+      margin-top: 8px;
+    }
+
+    .slide-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Cover Slide */
+    .cover-slide {
+      background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, var(--primary-light) 100%);
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 80px;
+    }
+
+    .cover-slide .logo {
+      width: 120px;
+      height: 120px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 40px;
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+
+    .cover-slide .logo svg {
+      width: 60px;
+      height: 60px;
+      fill: white;
+    }
+
+    .cover-slide h1 {
+      font-family: 'Noto Serif SC', serif;
+      font-size: 3.5rem;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 16px;
+      letter-spacing: 4px;
+    }
+
+    .cover-slide h2 {
+      font-size: 1.8rem;
+      font-weight: 400;
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 40px;
+    }
+
+    .cover-slide .meta {
+      display: flex;
+      gap: 48px;
+      justify-content: center;
+      margin-top: 60px;
+    }
+
+    .cover-slide .meta-item {
+      color: rgba(255,255,255,0.8);
+      font-size: 1.1rem;
+    }
+
+    .cover-slide .meta-item strong {
+      color: var(--accent-light);
+      font-weight: 600;
+    }
+
+    .conference-badge {
+      display: inline-block;
+      background: var(--accent);
+      color: white;
+      padding: 8px 24px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 1rem;
+      margin-bottom: 24px;
+    }
+
+    /* Section Title */
+    .section-title {
+      font-family: 'Noto Serif SC', serif;
+      font-size: 1.6rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 20px;
+      padding-left: 16px;
+      border-left: 4px solid var(--accent);
+    }
+
+    /* Content Cards */
+    .content-grid {
+      display: grid;
+      gap: 20px;
+    }
+
+    .content-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .content-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+    .card {
+      background: var(--bg-light);
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+
+    .card.highlight {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+      color: white;
+      border: none;
+    }
+
+    .card.highlight .card-title { color: white; }
+    .card.highlight .card-text { color: rgba(255,255,255,0.9); }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--primary);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .card-icon svg {
+      width: 24px;
+      height: 24px;
+      fill: white;
+    }
+
+    .card.highlight .card-icon {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-dark);
+      margin-bottom: 8px;
+    }
+
+    .card-text {
+      font-size: 0.95rem;
+      color: var(--text-gray);
+      line-height: 1.6;
+    }
+
+    /* Task Type Cards */
+    .task-card {
+      text-align: center;
+      padding: 32px 24px;
+    }
+
+    .task-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+    }
+
+    .task-type {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+
+    .task-example {
+      font-size: 0.9rem;
+      color: var(--text-light);
+      font-style: italic;
+      margin: 12px 0;
+      padding: 12px;
+      background: rgba(0,0,0,0.03);
+      border-radius: 8px;
+    }
+
+    /* Metrics */
+    .metrics-row {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+    }
+
+    .metric-box {
+      text-align: center;
+      padding: 32px 48px;
+      background: linear-gradient(135deg, var(--bg-light) 0%, white 100%);
+      border-radius: 16px;
+      border: 2px solid var(--border);
+    }
+
+    .metric-value {
+      font-size: 3.5rem;
+      font-weight: 700;
+      color: var(--primary);
+      line-height: 1;
+    }
+
+    .metric-label {
+      font-size: 1.1rem;
+      color: var(--text-gray);
+      margin-top: 8px;
+    }
+
+    .metric-sublabel {
+      font-size: 0.85rem;
+      color: var(--text-light);
+      margin-top: 4px;
+    }
+
+    /* Architecture Diagram */
+    .architecture-diagram {
+      background: var(--bg-light);
+      border-radius: 16px;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .arch-layer {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .arch-box {
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      text-align: center;
+      min-width: 120px;
+    }
+
+    .arch-box.primary { background: var(--primary); color: white; }
+    .arch-box.secondary { background: var(--primary-light); color: white; }
+    .arch-box.accent { background: var(--accent); color: white; }
+    .arch-box.light { background: var(--bg-white); color: var(--text-dark); border: 1px solid var(--border); }
+
+    .arch-arrow {
+      font-size: 1.2rem;
+      color: var(--text-light);
+    }
+
+    .arch-row-labels {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      margin-top: 24px;
+    }
+
+    .arch-label {
+      font-size: 0.85rem;
+      color: var(--text-gray);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .arch-label-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    /* Pipeline Steps */
+    .pipeline {
+      display: flex;
+      gap: 16px;
+      overflow-x: auto;
+      padding: 20px 0;
+    }
+
+    .pipeline-step {
+      flex: 1;
+      min-width: 200px;
+      background: var(--bg-light);
+      border-radius: 12px;
+      padding: 20px;
+      position: relative;
+      border: 1px solid var(--border);
+    }
+
+    .pipeline-step::after {
+      content: '→';
+      position: absolute;
+      right: -20px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1.5rem;
+      color: var(--accent);
+      font-weight: bold;
+    }
+
+    .pipeline-step:last-child::after {
+      display: none;
+    }
+
+    .step-number {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      background: var(--primary);
+      color: white;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 28px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .step-title {
+      font-weight: 600;
+      color: var(--text-dark);
+      margin-bottom: 8px;
+    }
+
+    .step-desc {
+      font-size: 0.85rem;
+      color: var(--text-gray);
+      line-height: 1.5;
+    }
+
+    /* Results Table */
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+
+    .results-table th {
+      background: var(--primary);
+      color: white;
+      padding: 16px 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    .results-table th:first-child { border-radius: 8px 0 0 0; }
+    .results-table th:last-child { border-radius: 0 8px 0 0; }
+
+    .results-table td {
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .results-table tr:nth-child(even) {
+      background: var(--bg-light);
+    }
+
+    .results-table tr:hover {
+      background: rgba(26, 54, 93, 0.05);
+    }
+
+    .success-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .success-badge.high { background: #c6f6d5; color: #276749; }
+    .success-badge.medium { background: #feebc8; color: #975a16; }
+    .success-badge.low { background: #fed7d7; color: #c53030; }
+
+    /* Bar Chart */
+    .bar-chart {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    .bar-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .bar-label {
+      width: 120px;
+      font-weight: 500;
+      color: var(--text-dark);
+    }
+
+    .bar-container {
+      flex: 1;
+      height: 32px;
+      background: var(--bg-light);
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 12px;
+      color: white;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: width 1s ease;
+    }
+
+    .bar-fill.success { background: linear-gradient(90deg, var(--success), #48bb78); }
+    .bar-fill.spl { background: linear-gradient(90deg, var(--primary), var(--primary-light)); }
+
+    /* Performance Analysis */
+    .perf-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .perf-card {
+      background: var(--bg-light);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .perf-title {
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 16px;
+      font-size: 1.1rem;
+    }
+
+    .perf-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .perf-bar-label {
+      width: 140px;
+      font-size: 0.9rem;
+      color: var(--text-gray);
+    }
+
+    .perf-bar-track {
+      flex: 1;
+      height: 24px;
+      background: var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .perf-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    /* Timeline */
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+      padding-left: 32px;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 8px;
+      bottom: 8px;
+      width: 3px;
+      background: var(--border);
+      border-radius: 2px;
+    }
+
+    .timeline-item {
+      position: relative;
+      padding: 16px 20px;
+      background: var(--bg-light);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -28px;
+      top: 24px;
+      width: 14px;
+      height: 14px;
+      background: var(--primary);
+      border-radius: 50%;
+      border: 3px solid white;
+      box-shadow: 0 0 0 2px var(--primary);
+    }
+
+    .timeline-title {
+      font-weight: 600;
+      color: var(--text-dark);
+      margin-bottom: 4px;
+    }
+
+    .timeline-desc {
+      font-size: 0.9rem;
+      color: var(--text-gray);
+    }
+
+    /* Summary Grid */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    .summary-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 20px;
+      background: var(--bg-light);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    .summary-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--primary);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .summary-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+
+    .summary-icon.success { background: var(--success); }
+    .summary-icon.warning { background: var(--warning); }
+
+    .summary-text h4 {
+      font-weight: 600;
+      color: var(--text-dark);
+      margin-bottom: 4px;
+    }
+
+    .summary-text p {
+      font-size: 0.9rem;
+      color: var(--text-gray);
+      line-height: 1.5;
+    }
+
+    /* Team Section */
+    .team-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .team-member {
+      text-align: center;
+      padding: 32px 24px;
+      background: var(--bg-light);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+    }
+
+    .member-avatar {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      border-radius: 50%;
+      margin: 0 auto 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      color: white;
+      font-weight: 600;
+    }
+
+    .member-name {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--text-dark);
+      margin-bottom: 4px;
+    }
+
+    .member-role {
+      font-size: 0.9rem;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .member-tasks {
+      font-size: 0.85rem;
+      color: var(--text-gray);
+      line-height: 1.6;
+    }
+
+    /* Navigation */
+    .nav-controls {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      background: rgba(26, 54, 93, 0.95);
+      padding: 12px 24px;
+      border-radius: 40px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      z-index: 100;
+    }
+
+    .nav-btn {
+      width: 40px;
+      height: 40px;
+      background: rgba(255,255,255,0.1);
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s ease;
+    }
+
+    .nav-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .nav-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+
+    .slide-counter {
+      color: white;
+      font-size: 0.95rem;
+      font-weight: 500;
+      min-width: 80px;
+      text-align: center;
+    }
+
+    .progress-dots {
+      display: flex;
+      gap: 8px;
+    }
+
+    .progress-dot {
+      width: 8px;
+      height: 8px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 50%;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .progress-dot.active {
+      background: var(--accent);
+      transform: scale(1.2);
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-in {
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+
+    /* Two Column Layout */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+    }
+
+    /* List Styles */
+    .styled-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .styled-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--bg-light);
+      border-radius: 8px;
+      border-left: 3px solid var(--primary);
+    }
+
+    .styled-list li::before {
+      content: '✓';
+      color: var(--primary);
+      font-weight: bold;
+    }
+
+    /* Highlight Box */
+    .highlight-box {
+      background: linear-gradient(135deg, rgba(224, 123, 57, 0.1) 0%, rgba(224, 123, 57, 0.05) 100%);
+      border: 1px solid var(--accent);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin: 16px 0;
+    }
+
+    .highlight-box-title {
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    /* Slide Footer */
+    .slide-footer {
+      margin-top: auto;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--text-light);
+    }
+  </style>
+</head>
+<body>
+  <div class="presentation">
+
+    <!-- Slide 1: Cover -->
+    <div class="slide cover-slide active" data-slide="1">
+      <div class="logo">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+      </div>
+      <div class="conference-badge">CVPR 2026</div>
+      <h1>MSGNav</h1>
+      <h2>基于多模态3D场景图的零样本具身导航</h2>
+      <p style="color: rgba(255,255,255,0.7); font-size: 1.1rem; max-width: 700px; line-height: 1.8;">
+        Unleashing the Power of Multi-modal 3D Scene Graph<br>for Zero-Shot Embodied Navigation
+      </p>
+      <div class="meta">
+        <div class="meta-item"><strong>复现团队</strong>：小组名称</div>
+        <div class="meta-item"><strong>复现日期</strong>：2026年6月</div>
+        <div class="meta-item"><strong>评估基准</strong>：GOAT-Bench</div>
+      </div>
+    </div>
+
+    <!-- Slide 2: Background - Zero-Shot Navigation -->
+    <div class="slide" data-slide="2">
+      <div class="slide-header">
+        <h1 class="slide-title">问题背景：零样本具身导航</h1>
+        <p class="slide-subtitle">Zero-Shot Embodied Navigation</p>
+      </div>
+      <div class="slide-content">
+        <div class="highlight-box">
+          <div class="highlight-box-title">核心挑战</div>
+          在不依赖特定物体类别训练数据的前提下，让智能体仅通过自然语言描述或参考图片，就能在未知的 3D 环境中找到任意目标物体。
+        </div>
+
+        <div class="two-col">
+          <div>
+            <h3 class="section-title">传统方法的局限</h3>
+            <ul class="styled-list">
+              <li>需要针对每个目标物体类别进行大量训练（数百万帧强化学习）</li>
+              <li>无法泛化到训练集之外的物体类别</li>
+              <li>面对新环境和新目标描述时完全失效</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="section-title">零样本导航要求</h3>
+            <div class="content-grid cols-1" style="gap: 12px;">
+              <div class="card">
+                <div class="card-title">1. 开放集视觉感知</div>
+                <div class="card-text">识别任意物体，不限于预定义类别</div>
+              </div>
+              <div class="card">
+                <div class="card-title">2. 3D 空间理解</div>
+                <div class="card-text">构建和维护环境的 3D 空间表征</div>
+              </div>
+              <div class="card">
+                <div class="card-title">3. 语义对齐</div>
+                <div class="card-text">将自然语言/图像描述与 3D 场景对应</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>MSGNav 复现项目</span>
+        <span>CVPR 2026</span>
+      </div>
+    </div>
+
+    <!-- Slide 3: GOAT-Bench -->
+    <div class="slide" data-slide="3">
+      <div class="slide-header">
+        <h1 class="slide-title">GOAT-Bench 基准测试</h1>
+        <p class="slide-subtitle">Go to Any Thing - 首个面向零样本长效导航的评测集</p>
+      </div>
+      <div class="slide-content">
+        <h3 class="section-title">三种任务类型</h3>
+        <div class="content-grid cols-3">
+          <div class="card task-card">
+            <div class="task-icon">📝</div>
+            <div class="task-type">description</div>
+            <div class="card-text">自然语言文本描述</div>
+            <div class="task-example">"a round mirror above a white sink"</div>
+          </div>
+          <div class="card task-card">
+            <div class="task-icon">🖼️</div>
+            <div class="task-type">image</div>
+            <div class="card-text">参考图片引导</div>
+            <div class="task-example">提供目标物体的参考图像</div>
+          </div>
+          <div class="card task-card">
+            <div class="task-icon">🏷️</div>
+            <div class="task-type">object</div>
+            <div class="card-text">物体类别标签</div>
+            <div class="task-example">"refrigerator", "chair"</div>
+          </div>
+        </div>
+
+        <div class="two-col" style="margin-top: 24px;">
+          <div>
+            <h3 class="section-title">评估指标</h3>
+            <div class="content-grid cols-1" style="gap: 16px;">
+              <div class="card">
+                <div class="card-title">Success Rate（成功率）</div>
+                <div class="card-text">智能体最终位置与目标物体距离 &lt; 0.25m 的子任务比例</div>
+              </div>
+              <div class="card">
+                <div class="card-title">SPL（路径效率）</div>
+                <div class="card-text">SPL = S × L<sub>opt</sub> / max(L<sub>opt</sub>, L<sub>actual</sub>)</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3 class="section-title">测试环境</h3>
+            <div class="card">
+              <div class="card-text">
+                <strong>HM3D v0.2 val</strong> 3D 场景数据集<br>
+                <strong>5 个评估场景</strong>：覆盖小/中/大型住宅<br>
+                <strong>38 个子任务</strong>：由 GOAT-Bench 预设<br>
+                <strong>最大步数</strong>：50 步/子任务
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>MSGNav 复现项目</span>
+        <span>CVPR 2026</span>
+      </div>
+    </div>
+
+    <!-- Slide 4: MSGNav Innovation -->
+    <div class="slide" data-slide="4">
+      <div class="slide-header">
+        <h1 class="slide-title">MSGNav 核心创新</h1>
+        <p class="slide-subtitle">多模态 3D 场景图作为连接 2D 感知与 3D 空间推理的桥梁</p>
+      </div>
+      <div class="slide-content">
+        <div class="content-grid cols-2">
+          <div class="card highlight">
+            <div class="card-icon">🔗</div>
+            <div class="card-title">多模态场景图 (MSG)</div>
+            <div class="card-text">将 YOLO-World + SAM + CLIP 的 2D 感知结果提升到 3D，构建包含物体空间位置、视觉特征、语义标签的有向图</div>
+          </div>
+          <div class="card highlight">
+            <div class="card-icon">✂️</div>
+            <div class="card-title">关键子图选择 (KSS)</div>
+            <div class="card-text">从数百个物体的场景图中智能选择与导航目标最相关的 Top-K 子图，压缩 VLM 输入</div>
+          </div>
+          <div class="card highlight">
+            <div class="card-icon">🔄</div>
+            <div class="card-title">自适应词汇更新 (AVU)</div>
+            <div class="card-text">VLM 可以请求对特定图像重新检测指定类别，解决"VLM 看到但检测模型漏检"的问题</div>
+          </div>
+          <div class="card highlight">
+            <div class="card-icon">🔁</div>
+            <div class="card-title">闭环推理 (CLR)</div>
+            <div class="card-text">将历史错误决策注入提示，避免 VLM 重复犯错</div>
+          </div>
+        </div>
+
+        <div class="highlight-box" style="margin-top: 24px;">
+          <div class="highlight-box-title">零样本特性</div>
+          整个系统无需任何导航训练，仅依赖预训练模型（YOLO-World, SAM, CLIP）和 VLM API
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>MSGNav 复现项目</span>
+        <span>CVPR 2026</span>
+      </div>
+    </div>
+
+    <!-- Slide 5: System Architecture -->
+    <div class="slide" data-slide="5">
+      <div class="slide-header">
+        <h1 class="slide-title">算法流程：系统架构</h1>
+        <p class="slide-subtitle">MSGNav 整体架构图</p>
+      </div>
+      <div class="slide-content">
+        <div class="architecture-diagram">
+          <div class="arch-layer">
+            <div class="arch-box primary">RGB-D 传感器<br><small>1280×1280, HFOV=120°</small></div>
+            <span class="arch-arrow">↓</span>
+            <div class="arch-box secondary">感知层<br><small>YOLO + SAM + CLIP</small></div>
+          </div>
+          <div class="arch-layer">
+            <span class="arch-arrow">↓</span>
+            <div class="arch-box accent">多模态 3D 场景图<br><small>增量构建 · DBSCAN 去噪</small></div>
+          </div>
+          <div class="arch-layer">
+            <span class="arch-arrow">↓</span>
+            <div class="arch-box secondary">关键子图选择 (KSS)<br><small>Top-K=20 关键物体</small></div>
+          </div>
+          <div class="arch-layer">
+            <span class="arch-arrow">↓</span>
+            <div class="arch-box primary">VLM 导航决策<br><small>Qwen-VL-Max · AVU + CLR</small></div>
+          </div>
+          <div class="arch-layer">
+            <span class="arch-arrow">↓</span>
+            <div class="arch-box accent">TSDF 路径规划<br><small>voxel=0.1m · NavMesh</small></div>
+          </div>
+          <div class="arch-layer">
+            <span class="arch-arrow">↓</span>
+            <div class="arch-box light">动作执行<br><small>Habitat-Sim 0.2.5</small></div>
+          </div>
+        </div>
+
+        <div class="arch-row-labels">
+          <div class="arch-label"><span class="arch-label-dot" style="background: var(--primary);"></span> RGB-D 输入</div>
+          <div class="arch-label"><span class="arch-label-dot" style="background: var(--primary-light);"></span> 感知与建图</div>
+          <div class="arch-label"><span class="arch-label-dot" style="background: var(--accent);"></span> 推理与规划</div>
+          <div class="arch-label"><span class="arch-label-dot" style="background: var(--border);"></span> 执行输出</div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>MSGNav 复现项目</span>
+        <span>CVPR 2026</span>
+      </div>
+    </div>
+
+    <!-- Slide 6: Scene Graph Construction -->
+    <div class="slide" data-slide="6">
+      <div class="slide-header">
+        <h1 class="slide-title">算法原理：多模态 3D 场景图构建</h1>
+        <p class="slide-subtitle">Multimodal Scene Graph (MSG) - 动态维护的有向图 G = (V, E)</p>
+      </div>
+      <div class="slide-content">
+        <div class="pipeline">
+          <div class="pipeline-step">
+            <span class="step-number">1</span>
+            <div class="step-title">YOLO-World v8x 检测</div>
+            <div class="step-desc">输入 1280×1280 RGB，输出 N 个检测框 + 类别（200类HM3D），置信度≥0.5</div>
+          </div>
+          <div class="pipeline-step">
+            <span class="step-number">2</span>
+            <div class="step-title">SAM ViT-L 分割</div>
+            <div class="step-desc">生成精细像素掩码，过滤掩码面积&lt;25px² 或 &gt;50%图像面积</div>
+          </div>
+          <div class="pipeline-step">
+            <span class="step-number">3</span>
+            <div class="step-title">深度反投影</div>
+            <div class="step-desc">相机内参 + 深度图 → 3D点云，体素下采样 0.01m</div>
+          </div>
+          <div class="pipeline-step">
+            <span class="step-number">4</span>
+            <div class="step-title">DBSCAN 去噪</div>
+            <div class="step-desc">eps=0.1m, min_points=10，过滤点数&lt;16的物体</div>
+          </div>
+          <div class="pipeline-step">
+            <span class="step-number">5</span>
+            <div class="step-title">CLIP 编码</div>
+            <div class="step-desc">6个视角渲染 → ViT-H/14 编码 → 1024维特征 + 零样本分类</div>
+          </div>
+          <div class="pipeline-step">
+            <span class="step-number">6</span>
+            <div class="step-title">跨帧匹配</div>
+            <div class="step-desc">空间IoU + 视觉余弦 → 匈牙利算法全局最优匹配</div>
+          </div>
+        </div>
+
+        <div class="two-col" style="margin-top: 24px;">
+          <div class="card">
+            <div class="card-title">节点 V — 3D物体实例</div>
+            <div class="card-text">
+              • 3D 包围盒 (AABB) + 点云<br>
+              • CLIP 视觉特征 (1024维)<br>
+              • 物体类别名 + 置信度<br>
+              • 检测次数 + 参考图像
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title">边 E — 空间关系</div>
+            <div class="card-text">
+              • 中心距离 &lt; 3.5m 时建立<br>
+              • 关系图像（共现关键帧）<br>
+              • 关系描述（VLM生成）<br>
+              • 检测次数
+            </div>
+          </div>
+        </div>
+
+        <div class="highlight-box">
+          <div class="highlight-box-title">周期性维护</div>
+          每 20 步执行：merge（合并重叠度高且特征相似的物体）/ denoise（移除检测次数&lt;3的低质量物体）
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>MSGNav 复现项目</span>
+        <span>CVPR 2026</span>
+      </div>
+    </div>
+
+    <!-- Slide 7: KSS and VLM Decision -->
+    <div class="slide" data-slide="7">
+      <div class="slide-header">
+        <h1 class="slide-title">算法原理：关键子图选择与VLM决策</h1>
+        <p class="slide-subtitle">Key Subgraph Selection (KSS) + VLM Navigation Reasoning</p>
+      </div>
+      <div class="slide-content">
+        <div class="two-col">
+          <div>
+            <h3 class="section-title">关键子图选择 (KSS)</h3>
+            <div class="card" style="margin-bottom: 16px;">
+              <div class="card-title">阶段一：语义预过滤</div>
+              <div class="card-text">提取所有物体的类别名、房间标签、邻居关系 → VLM（仅文本）选出 Top-K=20 相关类别</div>
+            </div>
+            <div class="card">
+              <div class="card-title">阶段二：空间图剪枝</div>
+              <div class="card-text">
+                • 以关键物体为中心，保留直接邻居<br>
+                • 贪心算法选择最少图像覆盖所有边<br>
+                • 确保每个边至少有一张共现图像
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3 class="section-title">VLM 导航决策</h3>
+            <div class="card" style="margin-bottom: 16px;">
+              <div class="card-title">提示工程</div>
+              <div class="card-text">任务指令 + 场景图摘要 + 当前观测 + 周边物体 + 历史信息 + 决策格式</div>
+            </div>
+            <div class="card" style="margin-bottom: 16px;">
+              <div class="card-title">三种决策输出</div>
+              <div class="card-text">
+                <strong>Object i</strong>：选择物体 i 作为目标 → 路径规划走向<br>
+                <strong>Image i, category</strong>：指定类别重新检测（AVU）<br>
+                <strong>Continue Exploration</strong>：继续探索前沿区域
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title">终点确认</div>
+              <div class="card-text">到达候选目标附近（1.5m）后，VLM 通过 6×40°=240° 环视进行 Yes/No 验证</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="highlight-box" style="margin-top: 16px;">
+          <div class="highlight-box-title">技术参数</div>
+          VLM: Qwen-VL-Max (阿里云 DashScope) | temperature=0.7, max_tokens=4096 | CLIP: ViT-H-14-quickgelu, dfn5b
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>MSGNav 复现项目</span>
+        <span>CVPR 2026</span>
+      </div>
+    </div>
+
+    <!-- Slide 8: Overall Results -->
+    <div class="slide" data-slide="8">
+      <div class="slide-header">
+        <h1 class="slide-title">运行结果：整体评估</h1>
+        <p class="slide-subtitle">MSGNav + Qwen-VL-Max 在 GOAT-Bench 上的复现结果</p>
+      </div>
+      <div class="slide-content">
+        <div class="metrics-row">
+          <div class="metric-box">
+            <div class="metric-value">68.42%</div>
+            <div class="metric-label">总成功率</div>
+            <div class="metric-sublabel">38个子任务中成功26个</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value">36.49</div>
+            <div class="metric-label">SPL</div>
+            <div class="metric-sublabel">路径效率指标</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value">5</div>
+            <div class="metric-label">评估场景</div>
+            <div class="metric-sublabel">小/中/大型住宅</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value">1338</div>
+            <div class="metric-label">可视化图片</div>
+            <div class="metric-sublabel">PNG 格式</div>
+          </div>
+        </div>
+
+        <h3 class="section-title" style="margin-top: 32px;">按任务类型分析</h3>
+        <div class="bar-chart">
+          <div class="bar-item">
+            <span class="bar-label">image 任务</span>
+            <div class="bar-container">
+              <div class="bar-fill success" style="width: 80%;">80.00% · SPL: 40.59</div>
+            </div>
+          </div>
+          <div class="bar-item">
+            <span class="bar-label">object 任务</span>
+            <div class="bar-container">
+              <div class="bar-fill success" style="width: 73.33%;">73.33% · SPL: 46.30</div>
+            </div>
+          </div>
+          <div class="bar-item">
+            <span class="bar-label">description 任务</span>
+            <div class="bar-container">
+              <div class="bar-fill success" style="width: 53.85%;">53.85% · SPL: 22.01</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="highlight-box">
+          <div class="highlight-box-title">关键发现</div>
+          图像引导任务表现最优（80%成功率），参考图片提供最直观的视觉线索；描述类任务仍是瓶颈（53.85%），复杂空间关系语义理解受限于VLM能力。
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>MSGNav 复现项目</span>
+        <span>CVPR 2026</span>
+      </div>
+    </div>
+
+    <!-- Slide 9: Scene Results -->
+    <div class="slide" data-slide="9">
+      <div class="slide-header">
+        <h1 class="slide-title">运行结果：各场景详细分析</h1>
+        <p class="slide-subtitle">5个HM3D场景的评估结果对比</p>
+      </div>
+      <div class="slide-content">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>场景 ID</th>
+              <th>规模</th>
+              <th>子任务</th>
+              <th>成功率</th>
+              <th>SPL</th>
+              <th>可视化</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>00820-mL8ThkuaVTM</strong></td>
+              <td>小 (~80m²)</td>
+              <td>9</td>
+              <td><span class="success-badge high">100.00%</span></td>
+              <td><strong>60.23</strong></td>
+              <td>41张</td>
+            </tr>
+            <tr>
+              <td><strong>00815-h1zeeAwLh9Z</strong></td>
+              <td>中 (~100m²)</td>
+              <td>5</td>
+              <td><span class="success-badge high">80.00%</span></td>
+              <td>37.61</td>
+              <td>71张</td>
+            </tr>
+            <tr>
+              <td><strong>00803-k1cupFYWXJ6</strong></td>
+              <td>中 (~180m²)</td>
+              <td>9</td>
+              <td><span class="success-badge high">77.78%</span></td>
+              <td>50.61</td>
+              <td>460张</td>
+            </tr>
+            <tr>
+              <td><strong>00821-eF36g7L6Z9M</strong></td>
+              <td>大 (~230m²)</td>
+              <td>10</td>
+              <td><span class="success-badge medium">60.00%</span></td>
+              <td>38.82</td>
+              <td>460张</td>
+            </tr>
+            <tr>
+              <td><strong>00800-TEEsavR23oF</strong></td>
+              <td>大 (~300m²)</td>
+              <td>5</td>
+              <td><span class="success-badge medium">60.00%</span></td>
+              <td>16.71</td>
+              <td>306张</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="two-col" style="margin-top: 24px;">
+          <div class="card">
+            <div class="card-title">场景规模影响显著</div>
+            <div class="card-text">小场景 (80m²) 100% 成功 vs 大场景 (300m²) 60%。大空间中场景图节点数增多，KSS剪枝信息损失增加。</div>
+          </div>
+          <div class="card">
+            <div class="card-title">描述类任务失败案例</div>
+            <div class="card-text">"white pillow near clothes and iron board" 在两个大场景中均失败，三层空间关系链超出VLM理解能力。</div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>MSGNav 复现项目</span>
+        <span>CVPR 2026</span>
+      </div>
+    </div>
+
+    <!-- Slide 10: Performance Analysis -->
+    <div class="slide" data-slide="10">
+      <div class="slide-header">
+        <h1 class="slide-title">性能分析：耗时分解</h1>
+        <p class="slide-subtitle">每步平均耗时 ~104秒 的瓶颈分析</p>
+      </div>
+      <div class="slide-content">
+        <div class="perf-grid">
+          <div class="perf-card">
+            <div class="perf-title">各阶段耗时占比</div>
+            <div class="perf-bar">
+              <span class="perf-bar-label">感知层 (YOLO+SAM+CLIP)</span>
+              <div class="perf-bar-track">
+                <div class="perf-bar-fill" style="width: 87%; background: var(--primary);">90.5s (87.0%)</div>
+              </div>
+            </div>
+            <div class="perf-bar">
+              <span class="perf-bar-label">VLM API 调用</span>
+              <div class="perf-bar-track">
+                <div class="perf-bar-fill" style="width: 10%; background: var(--accent);">10.5s (10.1%)</div>
+              </div>
+            </div>
+            <div class="perf-bar">
+              <span class="perf-bar-label">TSDF 路径规划</span>
+              <div class="perf-bar-track">
+                <div class="perf-bar-fill" style="width: 2.5%; background: var(--success);">2.6s (2.5%)</div>
+              </div>
+            </div>
+            <div class="perf-bar">
+              <span class="perf-bar-label">内存管理 + 前沿更新</span>
+              <div class="perf-bar-track">
+                <div class="perf-bar-fill" style="width: 0.4%; background: var(--text-light);">0.4s (0.4%)</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="perf-card">
+            <div class="perf-title">瓶颈分析</div>
+            <ul class="styled-list">
+              <li>I/O密集：200+张图片写入磁盘</li>
+              <li>网络延迟：VLM API排队约10-15s/次</li>
+              <li>CPU单线程：TSDF融合、图像渲染</li>
+              <li>GPU利用率低(~0%)：仅在推理时短暂工作</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="highlight-box" style="margin-top: 20px;">
+          <div class="highlight-box-title">GPU 利用率分析</div>
+          GPU显存占用 12.7GB 仅因模型权重驻留（YOLO: 250MB, SAM: 350MB, CLIP: 2.5GB）。完全串行的推理管线导致GPU无法充分发挥性能。
+        </div>
+
+        <div class="metrics-row" style="margin-top: 20px;">
+          <div class="metric-box">
+            <div class="metric-value" style="font-size: 2.5rem;">~104s</div>
+            <div class="metric-label">每步平均耗时</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value" style="font-size: 2.5rem;">~10.5s</div>
+            <div class="metric-label">VLM 响应时间</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value" style="font-size: 2.5rem;">~2s</div>
+            <div class="metric-label">GPU 实际计算</div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>MSGNav 复现项目</span>
+        <span>CVPR 2026</span>
+      </div>
+    </div>
+
+    <!-- Slide 11: Project Summary -->
+    <div class="slide" data-slide="11">
+      <div class="slide-header">
+        <h1 class="slide-title">项目总结</h1>
+        <p class="slide-subtitle">复现完成度、与论文对比、核心发现</p>
+      </div>
+      <div class="slide-content">
+        <div class="summary-grid">
+          <div class="summary-item">
+            <div class="summary-icon success">
+              <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+            </div>
+            <div class="summary-text">
+              <h4>环境搭建完成</h4>
+              <p>Habitat-Sim 0.2.5, PyTorch 2.0.1+cu118, YOLO-World v8x, SAM ViT-L, CLIP ViT-H/14</p>
+            </div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-icon success">
+              <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+            </div>
+            <div class="summary-text">
+              <h4>数据准备完成</h4>
+              <p>HM3D v0.2 val 场景, GOAT-Bench episodes, 模型权重下载 (共约3.1GB)</p>
+            </div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-icon success">
+              <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+            </div>
+            <div class="summary-text">
+              <h4>评估运行完成</h4>
+              <p>5场景×38子任务, 1338张可视化PNG, 10个MP4导航视频</p>
+            </div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-icon warning">
+              <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+            </div>
+            <div class="summary-text">
+              <h4>与论文差异分析</h4>
+              <p>成功率68.42% vs 论文79.50%（-11.08%），可能原因：VLM差异(QLwen vs GPT-4o)、场景样本偏差、参数未调优</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="two-col" style="margin-top: 24px;">
+          <div class="card">
+            <div class="card-title" style="color: var(--success);">核心优势</div>
+            <div class="card-text">
+              • 真正的零样本，无需任何导航训练<br>
+              • 图像引导表现优异 (80%)<br>
+              • 场景图设计精巧，压缩VLM输入<br>
+              • 模块化设计，易于替换或升级
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="color: var(--error);">当前局限</div>
+            <div class="card-text">
+              • 描述类任务仍是瓶颈 (53.85%)<br>
+              • 大场景效率低 (SPL显著下降)<br>
+              • 实时性不足 (~104s/步)<br>
+              • 对VLM质量敏感
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>MSGNav 复现项目</span>
+        <span>CVPR 2026</span>
+      </div>
+    </div>
+
+    <!-- Slide 12: Team and Reflections -->
+    <div class="slide" data-slide="12">
+      <div class="slide-header">
+        <h1 class="slide-title">小组分工与心得体会</h1>
+        <p class="slide-subtitle">团队协作与项目反思</p>
+      </div>
+      <div class="slide-content">
+        <div class="team-grid">
+          <div class="team-member">
+            <div class="member-avatar">A</div>
+            <div class="member-name">组长A</div>
+            <div class="member-role">项目负责人</div>
+            <div class="member-tasks">环境搭建 · 系统调试<br>算法流程设计</div>
+          </div>
+          <div class="team-member">
+            <div class="member-avatar">B</div>
+            <div class="member-name">组员B</div>
+            <div class="member-role">算法实现</div>
+            <div class="member-tasks">场景图构建 · KSS实现<br>VLM提示工程</div>
+          </div>
+          <div class="team-member">
+            <div class="member-avatar">C</div>
+            <div class="member-name">组员C</div>
+            <div class="member-role">评估分析</div>
+            <div class="member-tasks">数据准备 · 结果分析<br>性能优化</div>
+          </div>
+        </div>
+
+        <div class="two-col" style="margin-top: 32px;">
+          <div>
+            <h3 class="section-title">遇到的主要困难</h3>
+            <div class="timeline">
+              <div class="timeline-item">
+                <div class="timeline-title">环境配置</div>
+                <div class="timeline-desc">conda缓存问题、aihabitat频道不可用、libEGL缺失、numpy版本冲突</div>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-title">数据获取</div>
+                <div class="timeline-desc">Facebook CDN返回403、Google Drive被墙、部分navmesh缺失</div>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-title">API兼容</div>
+                <div class="timeline-desc">OpenAI新版本API差异、Qwen API兼容模式调试</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3 class="section-title">学习心得</h3>
+            <div class="content-grid cols-1" style="gap: 12px;">
+              <div class="card">
+                <div class="card-text">
+                  <strong>零样本导航的挑战</strong>：深刻理解了将语言/图像理解与3D空间推理结合的难度
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-text">
+                  <strong>多模态模型应用</strong>：掌握了大模型（VLM）在具身智能任务中的提示工程技巧
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-text">
+                  <strong>科研复现经验</strong>：学会了从零搭建复杂科研环境、调试API、处理数据的完整流程
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <span>MSGNav 复现项目</span>
+        <span>CVPR 2026</span>
+      </div>
+    </div>
+
+    <!-- Slide 13: Thank You -->
+    <div class="slide cover-slide" data-slide="13">
+      <div class="logo">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+      </div>
+      <h1 style="font-size: 3rem;">感谢聆听</h1>
+      <h2>欢迎提问与讨论</h2>
+      <div class="meta" style="margin-top: 40px;">
+        <div class="meta-item"><strong>论文</strong>：MSGNav (CVPR 2026)</div>
+        <div class="meta-item"><strong>复现</strong>：Qwen-VL-Max + GOAT-Bench</div>
+      </div>
+      <div style="margin-top: 60px; color: rgba(255,255,255,0.6); font-size: 0.95rem;">
+        复现代码与详细报告见 GitHub: github.com/zikang888/MSGNav-Reproduction
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Navigation Controls -->
+  <div class="nav-controls">
+    <button class="nav-btn" id="prevBtn">
+      <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+    </button>
+    <div class="progress-dots" id="progressDots"></div>
+    <span class="slide-counter" id="slideCounter">1 / 13</span>
+    <button class="nav-btn" id="nextBtn">
+      <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+    </button>
+  </div>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    let currentSlide = 1;
+
+    const slideCounter = document.getElementById('slideCounter');
+    const progressDots = document.getElementById('progressDots');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+
+    // Create progress dots
+    for (let i = 1; i <= totalSlides; i++) {
+      const dot = document.createElement('div');
+      dot.className = 'progress-dot' + (i === 1 ? ' active' : '');
+      dot.dataset.slide = i;
+      dot.addEventListener('click', () => goToSlide(i));
+      progressDots.appendChild(dot);
+    }
+
+    function updateSlide() {
+      slides.forEach((slide, index) => {
+        slide.classList.remove('active');
+        if (index + 1 === currentSlide) {
+          slide.classList.add('active');
+        }
+      });
+
+      slideCounter.textContent = `${currentSlide} / ${totalSlides}`;
+
+      document.querySelectorAll('.progress-dot').forEach((dot, index) => {
+        dot.classList.toggle('active', index + 1 === currentSlide);
+      });
+    }
+
+    function goToSlide(n) {
+      currentSlide = n;
+      if (currentSlide < 1) currentSlide = 1;
+      if (currentSlide > totalSlides) currentSlide = totalSlides;
+      updateSlide();
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) {
+        currentSlide++;
+        updateSlide();
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) {
+        currentSlide--;
+        updateSlide();
+      }
+    }
+
+    prevBtn.addEventListener('click', prevSlide);
+    nextBtn.addEventListener('click', nextSlide);
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        goToSlide(1);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        goToSlide(totalSlides);
+      }
+    });
+
+    // Touch support
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    document.addEventListener('touchstart', (e) => {
+      touchStartX = e.changedTouches[0].screenX;
+    });
+
+    document.addEventListener('touchend', (e) => {
+      touchEndX = e.changedTouches[0].screenX;
+      if (touchStartX - touchEndX > 50) {
+        nextSlide();
+      } else if (touchEndX - touchStartX > 50) {
+        prevSlide();
+      }
+    });
+  </script>
+</body>
+</html>
