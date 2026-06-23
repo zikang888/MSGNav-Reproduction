@@ -12,6 +12,7 @@
 | `eval_goatbench.yaml` | GOAT-Bench 评估配置文件（含完整传感器/VLM/导航/场景图参数） |
 | `const.py.example` | API 密钥配置模板（Qwen / GPT） |
 | `results_part_*` (37个分卷) | 分卷压缩的结果文件（1338 张可视化 PNG + pkl 指标文件, 1.6GB） |
+| `videos/` | 5 个场景的导航视频（10 个 MP4，共 14MB，包含 visualization + frontier） |
 
 ## 复现环境
 
@@ -131,6 +132,24 @@ results/example_goatbench/
     ├── frontier/       (40 张)
     └── frontier_video/ (210 张)
 ```
+
+---
+
+## 导航视频
+
+使用 `ffmpeg` 从逐帧 PNG 合成，帧率 10 fps。
+
+| 场景 | Visualization 视频 | Frontier 视频 |
+|------|:---:|:---:|
+| 00820-mL8ThkuaVTM (小, 100%) | 15帧/1.5s | 11帧/1.1s |
+| 00800-TEEsavR23oF (大, 60%) | 129帧/12.9s | 48帧/4.8s |
+| 00803-k1cupFYWXJ6 (中, 77.8%) | 216帧/21.6s | 28帧/2.8s |
+| 00815-h1zeeAwLh9Z (中, 80%) | 25帧/2.5s | 21帧/2.1s |
+| 00821-eF36g7L6Z9M (大, 60%) | 210帧/21.0s | 40帧/4.0s |
+
+> **`visualization` 视频**: 多面板综合视图（Agent 第一人称视角 + TSDF 俯视图 + 检测/分割标注），完整展示从起始位置到终点的导航全过程。
+>
+> **`frontier` 视频**: 纯 TSDF 前沿探索俯视图（紫色=探索前沿, 绿色=导航目标, 红色=当前位姿），直观展示 agent 对环境的探索过程。
 
 ---
 
