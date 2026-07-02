@@ -188,26 +188,22 @@ def add_table_caption(doc, caption_text):
 
 
 def add_table(doc, headers, rows, col_widths=None):
-    """黑白风格三线表，内容全居中"""
+    """白色背景三线表，内容全居中，表头加粗"""
     table = doc.add_table(rows=1 + len(rows), cols=len(headers))
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = 'Table Grid'
 
-    # 表头：加粗，黑色底纹，白字
+    # 表头：加粗黑字，白色背景（不加底纹）
     for j, h in enumerate(headers):
         cell = table.cell(0, j)
         cell.text = ''
         p = cell.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = p.add_run(h)
-        set_run_font(run, name=SONG, size=Pt(9), bold=True, color=RGBColor(0xFF, 0xFF, 0xFF))
+        set_run_font(run, name=SONG, size=Pt(9), bold=True, color=RGBColor(0, 0, 0))
         cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        # 黑色底纹
-        shading = OxmlElement('w:shd')
-        shading.set(qn('w:fill'), '000000')
-        cell._tc.get_or_add_tcPr().append(shading)
 
-    # 数据行：内容全居中
+    # 数据行：内容全居中，白色背景
     for i, row in enumerate(rows):
         for j, val in enumerate(row):
             cell = table.cell(i + 1, j)
@@ -231,6 +227,31 @@ def add_para_empty(doc):
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(6)
     p.paragraph_format.line_spacing = 1.0
+
+
+# 公式计数器
+eq_counter = [0]
+
+def add_equation(doc, omml_xml, caption_text):
+    """添加OMML格式公式（居中）+ 右侧编号（可索引）
+    omml_xml: m:oMath的XML字符串（不含外层m:oMathPara）
+    """
+    eq_counter[0] += 1
+    # 用oMathPara包裹，居中
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.space_after = Pt(6)
+    # 构建oMathPara
+    from lxml import etree
+    M_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
+    omath_para_xml = f'<m:oMathPara xmlns:m="{M_NS}"><m:oMath>{omml_xml}</m:oMath></m:oMathPara>'
+    omath_para = etree.fromstring(omath_para_xml)
+    p._element.append(omath_para)
+    # 编号（右对齐，制表符）
+    run = p.add_run(f'    ({eq_counter[0]})')
+    set_run_font(run, name=SONG, size=Pt(10.5))
+    return p
 
 
 # ============================================================
@@ -288,8 +309,18 @@ def add_report_body(doc):
 
     add_body(doc, '评估指标包括两个：成功率（Success Rate）和路径加权成功率（SPL）。'
              '成功率定义为智能体最终位置与目标物体距离小于0.25米的子任务比例；'
-             'SPL同时衡量成功性和路径最短性，其计算公式为SPL = S * L_opt / max(L_opt, L_actual)，'
-             '其中S为成功标志，L_opt为最短路径长度，L_actual为实际路径长度。')
+             'SPL同时衡量成功性和路径最短性，其计算如公式(1)所示：')
+
+    # SPL公式 - OMML格式
+    add_equation(doc,
+        '<m:r><m:t>SPL = S · </m:t></m:r>'
+        '<m:f><m:fPr><m:type m:val="bar"/></m:fPr>'
+        '<m:num><m:r><m:t>L</m:t></m:r><m:sSub><m:e><m:r><m:t></m:t></m:r></m:e><m:sub><m:r><m:t>opt</m:t></m:r></m:sub></m:sSub></m:num>'
+        '<m:den><m:r><m:t>max(L</m:t></m:r><m:sSub><m:e><m:r><m:t></m:t></m:r></m:e><m:sub><m:r><m:t>opt</m:t></m:r></m:sub></m:sSub><m:r><m:t>, L</m:t></m:r><m:sSub><m:e><m:r><m:t></m:t></m:r></m:e><m:sub><m:r><m:t>actual</m:t></m:r></m:sub></m:sSub><m:r><m:t>)</m:t></m:r></m:den></m:f>',
+        'SPL计算公式')
+
+    add_body(doc, '其中，S为成功标志（成功取1，失败取0），L_opt为最短路径长度，L_actual为实际路径长度。'
+             'SPL值越大表示导航性能越好，取值范围为[0,1]。')
 
     add_heading2(doc, '1.3  MSGNav核心创新')
     add_body(doc, 'MSGNav提出多模态3D场景图（Multimodal 3D Scene Graph, MSG）作为连接2D感知与3D空间推理的桥梁。'
@@ -308,7 +339,7 @@ def add_report_body(doc):
              '最终由TSDF路径规划模块驱动机器人执行动作。整个过程循环进行，直到找到目标或达到最大步数。')
 
     add_figure(doc, os.path.join(IMG_DIR, 'algorithm_flowchart.png'),
-               'MSGNav算法整体流程图', width=Cm(11))
+               'MSGNav算法整体流程图', width=Cm(6))
 
     add_heading2(doc, '2.2  多模型感知层')
     add_body(doc, '感知层是整个系统的基础，负责从RGB-D观测中提取2D感知结果。该层集成了三个预训练模型：'
@@ -319,17 +350,17 @@ def add_report_body(doc):
 
     add_heading2(doc, '2.3  多模态3D场景图构建（MSG）')
     add_body(doc, '场景图构建是MSGNav的核心模块，我们重点参与了该部分的实现与调试。构建过程分为六个步骤：')
-    add_body(doc, '第一步，YOLO-World检测：对当前帧RGB图像运行YOLO-World v8x检测器，输出200类HM3D物体的2D边界框和置信度，'
+    add_body(doc, '(1) YOLO-World检测：对当前帧RGB图像运行YOLO-World v8x检测器，输出200类HM3D物体的2D边界框和置信度，'
              '保留置信度大于等于0.5的检测结果。')
-    add_body(doc, '第二步，SAM分割：对每个检测框运行SAM ViT-L模型，获取精细的物体掩码，'
+    add_body(doc, '(2) SAM分割：对每个检测框运行SAM ViT-L模型，获取精细的物体掩码，'
              '并过滤面积异常（过大或过小）的掩码，减少噪声。')
-    add_body(doc, '第三步，深度反投影：利用相机内参和深度图，将2D掩码像素反投影到3D空间，'
+    add_body(doc, '(3) 深度反投影：利用相机内参和深度图，将2D掩码像素反投影到3D空间，'
              '生成3D点云，体素精度为0.01米。')
-    add_body(doc, '第四步，DBSCAN去噪：对3D点云运行DBSCAN聚类（eps=0.1米，min_points=10），'
+    add_body(doc, '(4) DBSCAN去噪：对3D点云运行DBSCAN聚类（eps=0.1米，min_points=10），'
              '去除离群噪声点，并过滤少于16个点的噪声簇。')
-    add_body(doc, '第五步，CLIP编码：对每个物体的代表性图像运行CLIP ViT-H-14，提取1024维视觉特征向量，'
+    add_body(doc, '(5) CLIP编码：对每个物体的代表性图像运行CLIP ViT-H-14，提取1024维视觉特征向量，'
              '用于后续的跨帧匹配和VLM输入。')
-    add_body(doc, '第六步，跨帧匹配：结合空间IoU和视觉特征余弦相似度，使用匈牙利算法将不同帧检测到的同一物体关联起来，'
+    add_body(doc, '(6) 跨帧匹配：结合空间IoU和视觉特征余弦相似度，使用匈牙利算法将不同帧检测到的同一物体关联起来，'
              '实现场景图的增量更新。')
 
     add_body(doc, '场景图中每个节点（物体）包含3D包围盒、CLIP视觉特征、物体类别名、置信度和检测次数等信息。'
@@ -343,7 +374,6 @@ def add_report_body(doc):
              '让VLM仅基于文本信息选出Top-20个与导航目标最相关的类别。第二阶段为空间图剪枝：'
              '以关键物体为中心保留直接邻居节点，再使用贪心算法选择最少的图像来覆盖所有边，进一步压缩输入。'
              '经过KSS处理后，VLM的输入被压缩到可控范围内，响应时间稳定在约10.5秒/次。')
-
     add_heading2(doc, '2.5  VLM导航决策')
     add_body(doc, 'VLM决策模块使用Qwen-VL-Max模型（通过阿里云DashScope API调用，temperature=0.7，max_tokens=4096）。'
              '输入包括任务指令、场景图摘要、当前观测图像、6个方向共240度的环视图像以及历史信息。'
@@ -406,17 +436,17 @@ def add_report_body(doc):
              '和前沿探索俯视图（紫色标记前沿、绿色标记目标、红色标记位姿）。图2至图5展示了不同规模场景的代表性可视化结果。')
 
     add_figure(doc, os.path.join(IMG_DIR, 'scene_small_vis.png'),
-               '小场景（00820）综合可视化：Agent视角与TSDF俯视图', width=Cm(10))
+               '小场景（00820）综合可视化：Agent视角与TSDF俯视图', width=Cm(6))
     add_figure(doc, os.path.join(IMG_DIR, 'scene_small_frontier.png'),
-               '小场景（00820）前沿探索俯视图', width=Cm(10))
+               '小场景（00820）前沿探索俯视图', width=Cm(6))
 
     add_body(doc, '从图2和图3可以看出，小场景中智能体探索充分，地图构建完整，前沿方向清晰，'
              '目标物体（绿色标记）被准确定位，这也是该场景100%成功率的原因。')
 
     add_figure(doc, os.path.join(IMG_DIR, 'scene_large_vis.png'),
-               '大场景（00800）综合可视化', width=Cm(10))
+               '大场景（00800）综合可视化', width=Cm(6))
     add_figure(doc, os.path.join(IMG_DIR, 'scene_large_frontier.png'),
-               '大场景（00800）前沿探索俯视图', width=Cm(10))
+               '大场景（00800）前沿探索俯视图', width=Cm(6))
 
     add_body(doc, '对比图4、图5与图2、图3可以看出，大场景中地图较为稀疏，探索范围有限，'
              '前沿区域分散，智能体需要更多步数才能覆盖整个空间，导致成功率下降。')
@@ -425,7 +455,7 @@ def add_report_body(doc):
     add_body(doc, 'image任务是表现最好的任务类型。图6展示了图像引导任务的参考图片示例。')
 
     add_figure(doc, os.path.join(IMG_DIR, 'image_goal_example.png'),
-               '图像引导任务参考图片示例', width=Cm(9))
+               '图像引导任务参考图片示例', width=Cm(6))
 
     add_body(doc, 'image任务成功率高达80%的原因在于：参考图片提供了最直观的视觉线索，'
              'CLIP图像-图像匹配直接且准确，VLM能够快速将参考图与场景图中的物体进行视觉相似度比较，'
@@ -494,10 +524,14 @@ def add_report_body(doc):
     add_heading1(doc, '5  小组分工与心得体会')
 
     add_heading2(doc, '5.1  小组分工')
-    add_body(doc, '本项目由三人小组协作完成，具体分工如下：组长负责整体项目管理、环境搭建、系统调试和算法流程设计，'
-             '协调各成员工作进度，确保项目按时完成；组员B负责核心算法实现，包括多模态3D场景图构建模块的编码与调试、'
-             'KSS关键子图选择模块的实现以及VLM提示工程的优化；组员C负责数据准备与结果分析，'
-             '包括HM3D数据集下载与配置、GOAT-Bench episode数据处理、评估结果统计与性能分析。')
+    add_body(doc, '本项目由两人小组协作完成。本人作为项目主要负责人，承担了绝大部分工作，具体分工如下：'
+             '本人负责整体项目管理与系统搭建，包括环境搭建（Habitat-Sim、PyTorch3D等依赖配置）、'
+             'HM3D数据集下载与配置、GOAT-Bench episode数据处理、YAML配置适配、Qwen API配置，'
+             '以及核心算法的实现与调试，重点完成了多模态3D场景图构建模块（MSG）的编码调试、'
+             'KSS关键子图选择模块的实现、VLM提示工程优化、TSDF路径规划与前沿探索的整合，'
+             '并负责全部评估实验的运行、结果统计与性能分析、可视化结果整理及报告撰写。'
+             '组员协助参与了部分数据准备工作和初步结果整理，包括HM3D场景文件校验、'
+             '部分可视化图片的筛选与命名、参考文献的整理核对，以及报告文字的校对工作。')
 
     add_heading2(doc, '5.2  遇到的困难与解决')
     add_body(doc, '在复现过程中，我们遇到了诸多困难。首先是环境搭建问题，Habitat-Sim 0.2.5的headless模式'
