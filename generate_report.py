@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
 """
-MSGNav 课程报告生成脚本
-- 首页：深圳大学答题纸（保留原格式）
-- 正文：5号宋体，标题分级，题注小五加粗宋体可索引，图表居中，含流程图
+MSGNav 课程报告生成脚本（修正版）
+1. 封面：直接使用转换后的原始答题纸docx，格式完全保留
+2. 表格：黑白风格，内容全居中
+3. 标题：使用Word内置Heading样式，WPS可识别
+4. 题注：小五加粗宋体，可索引
 """
 from docx import Document
-from docx.shared import Pt, Cm, Inches, RGBColor, Emu
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+from docx.shared import Pt, Cm, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
-from docx.enum.section import WD_SECTION
-from docx.oxml.ns import qn, nsdecls
-from docx.oxml import parse_xml, OxmlElement
-import os
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+import os, copy
 
 SONG = '宋体'
 HEI = '黑体'
 IMG_DIR = '/workspace/report_images'
+COVER_DOCX = '/workspace/.uploads/converted/fc1b47f2-97d2-43d7-98b9-d0bd5b9748d2_以论文、报告等形式考核专用答题纸-机器人学导论-2026春-01(1).docx'
 
-# 全局题注计数器
 fig_counter = [0]
 tab_counter = [0]
 
@@ -29,7 +30,6 @@ def set_run_font(run, name=SONG, size=Pt(10.5), bold=False, color=None, italic=F
     run.font.italic = italic
     if color:
         run.font.color.rgb = color
-    # 设置中文字体
     rPr = run._element.get_or_add_rPr()
     rFonts = rPr.find(qn('w:rFonts'))
     if rFonts is None:
@@ -40,68 +40,117 @@ def set_run_font(run, name=SONG, size=Pt(10.5), bold=False, color=None, italic=F
     rFonts.set(qn('w:hAnsi'), name)
 
 
-def add_para(doc, text='', size=Pt(10.5), bold=False, name=SONG, align=WD_ALIGN_PARAGRAPH.LEFT,
-             space_before=Pt(0), space_after=Pt(6), line_spacing=1.5, indent_first=False, color=None, italic=False):
-    p = doc.add_paragraph()
-    p.alignment = align
-    pf = p.paragraph_format
-    pf.space_before = space_before
-    pf.space_after = space_after
-    pf.line_spacing = line_spacing
-    if indent_first:
-        pf.first_line_indent = Pt(21)  # 首行缩进2字符
-    if text:
-        run = p.add_run(text)
-        set_run_font(run, name=name, size=size, bold=bold, color=color, italic=italic)
-    return p
+def setup_heading_styles(doc):
+    """配置Word内置Heading样式，使其在WPS中可识别"""
+    from docx.enum.style import WD_STYLE_TYPE
+    styles = doc.styles
+
+    def get_or_create_heading(name, size, builtin_id):
+        try:
+            h = styles[name]
+        except KeyError:
+            h = styles.add_style(name, WD_STYLE_TYPE.PARAGRAPH)
+            h.style_id = builtin_id
+            h.hidden = False
+            pPr = h.element.get_or_add_pPr()
+            outline = OxmlElement('w:outlineLvl')
+            outline.set(qn('w:val'), str(builtin_id))
+            pPr.append(outline)
+            semi = OxmlElement('w:semiHidden')
+            semi.set(qn('w:val'), 'false')
+            pPr.append(semi)
+            unhide = OxmlElement('w:unhideWhenUsed')
+            unhide.set(qn('w:val'), 'true')
+            pPr.append(unhide)
+            qfmt = OxmlElement('w:qFormat')
+            qfmt.set(qn('w:val'), 'true')
+            pPr.append(qfmt)
+        h.font.name = HEI
+        h.font.size = Pt(size)
+        h.font.bold = True
+        h.font.color.rgb = RGBColor(0, 0, 0)
+        rPr = h.element.get_or_add_rPr()
+        rFonts = rPr.find(qn('w:rFonts'))
+        if rFonts is None:
+            rFonts = OxmlElement('w:rFonts')
+            rPr.insert(0, rFonts)
+        rFonts.set(qn('w:eastAsia'), HEI)
+        rFonts.set(qn('w:ascii'), HEI)
+        rFonts.set(qn('w:hAnsi'), HEI)
+        h.paragraph_format.space_before = Pt(18 if size == 15 else 12 if size == 14 else 8)
+        h.paragraph_format.space_after = Pt(10 if size == 15 else 6 if size == 14 else 4)
+        h.paragraph_format.line_spacing = 1.5
+        return h
+
+    get_or_create_heading('Heading 1', 15, '1')
+    get_or_create_heading('Heading 2', 14, '2')
+    get_or_create_heading('Heading 3', 12, '3')
+
+    # 创建Caption样式（如果不存在）
+    try:
+        styles['Caption']
+    except KeyError:
+        cap = styles.add_style('Caption', WD_STYLE_TYPE.PARAGRAPH)
+        cap.style_id = 'Caption'
+        cap.font.name = SONG
+        cap.font.size = Pt(9)
+        cap.font.bold = True
+        pPr = cap.element.get_or_add_pPr()
+        unhide = OxmlElement('w:unhideWhenUsed')
+        unhide.set(qn('w:val'), 'true')
+        pPr.append(unhide)
+        qfmt = OxmlElement('w:qFormat')
+        qfmt.set(qn('w:val'), 'true')
+        pPr.append(qfmt)
+
+    # 创建Table Grid样式（如果不存在）
+    try:
+        styles['Table Grid']
+    except KeyError:
+        tg = styles.add_style('Table Grid', WD_STYLE_TYPE.TABLE)
+        tg.style_id = 'TableGrid'
+        # 添加边框
+        pPr = tg.element.get_or_add_pPr()
+        tblBorders = OxmlElement('w:tblBorders')
+        for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
+            border = OxmlElement(f'w:{border_name}')
+            border.set(qn('w:val'), 'single')
+            border.set(qn('w:sz'), '4')
+            border.set(qn('w:space'), '0')
+            border.set(qn('w:color'), '000000')
+            tblBorders.append(border)
+        pPr.append(tblBorders)
 
 
 def add_heading1(doc, text):
-    """一级标题：小三黑体加粗"""
-    p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    pf = p.paragraph_format
-    pf.space_before = Pt(18)
-    pf.space_after = Pt(10)
-    pf.line_spacing = 1.5
-    run = p.add_run(text)
-    set_run_font(run, name=HEI, size=Pt(15), bold=True)
+    p = doc.add_paragraph(text, style='Heading 1')
     return p
-
 
 def add_heading2(doc, text):
-    """二级标题：四号黑体加粗"""
-    p = doc.add_paragraph()
-    pf = p.paragraph_format
-    pf.space_before = Pt(12)
-    pf.space_after = Pt(6)
-    pf.line_spacing = 1.5
-    run = p.add_run(text)
-    set_run_font(run, name=HEI, size=Pt(14), bold=True)
+    p = doc.add_paragraph(text, style='Heading 2')
     return p
 
-
 def add_heading3(doc, text):
-    """三级标题：小四黑体加粗"""
-    p = doc.add_paragraph()
-    pf = p.paragraph_format
-    pf.space_before = Pt(8)
-    pf.space_after = Pt(4)
-    pf.line_spacing = 1.5
-    run = p.add_run(text)
-    set_run_font(run, name=HEI, size=Pt(12), bold=True)
+    p = doc.add_paragraph(text, style='Heading 3')
     return p
 
 
 def add_body(doc, text, indent=True):
     """正文：5号宋体，首行缩进"""
-    return add_para(doc, text, size=Pt(10.5), name=SONG, indent_first=indent,
-                    space_after=Pt(4), line_spacing=1.5)
+    p = doc.add_paragraph()
+    pf = p.paragraph_format
+    pf.space_before = Pt(0)
+    pf.space_after = Pt(4)
+    pf.line_spacing = 1.5
+    if indent:
+        pf.first_line_indent = Pt(21)
+    run = p.add_run(text)
+    set_run_font(run, name=SONG, size=Pt(10.5))
+    return p
 
 
 def add_figure(doc, img_path, caption_text, width=Cm(12)):
-    """添加图片+题注（居中），题注小五加粗宋体可索引"""
-    # 图片
+    """图片+题注，居中，题注小五加粗宋体可索引"""
     p_img = doc.add_paragraph()
     p_img.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_img.paragraph_format.space_before = Pt(6)
@@ -111,13 +160,12 @@ def add_figure(doc, img_path, caption_text, width=Cm(12)):
         run.add_picture(img_path, width=width)
     else:
         run.add_text(f'[图片缺失: {img_path}]')
-    # 题注（使用Caption样式，可索引）
+
     fig_counter[0] += 1
     p_cap = doc.add_paragraph()
     p_cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_cap.paragraph_format.space_before = Pt(0)
     p_cap.paragraph_format.space_after = Pt(10)
-    # 设置为题注样式（使其可被Word索引）
     p_cap.style = doc.styles['Caption']
     label = f'图 {fig_counter[0]}  {caption_text}'
     run_cap = p_cap.add_run(label)
@@ -140,163 +188,70 @@ def add_table_caption(doc, caption_text):
 
 
 def add_table(doc, headers, rows, col_widths=None):
-    """添加三线表样式表格"""
+    """黑白风格三线表，内容全居中"""
     table = doc.add_table(rows=1 + len(rows), cols=len(headers))
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
     table.style = 'Table Grid'
-    # 表头
+
+    # 表头：加粗，黑色底纹，白字
     for j, h in enumerate(headers):
         cell = table.cell(0, j)
         cell.text = ''
         p = cell.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = p.add_run(h)
-        set_run_font(run, name=SONG, size=Pt(9), bold=True)
+        set_run_font(run, name=SONG, size=Pt(9), bold=True, color=RGBColor(0xFF, 0xFF, 0xFF))
         cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-        # 表头底纹
+        # 黑色底纹
         shading = OxmlElement('w:shd')
-        shading.set(qn('w:fill'), 'D9E2F3')
+        shading.set(qn('w:fill'), '000000')
         cell._tc.get_or_add_tcPr().append(shading)
-    # 数据行
+
+    # 数据行：内容全居中
     for i, row in enumerate(rows):
         for j, val in enumerate(row):
             cell = table.cell(i + 1, j)
             cell.text = ''
             p = cell.paragraphs[0]
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER if j > 0 else WD_ALIGN_PARAGRAPH.LEFT
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER  # 全部居中
             run = p.add_run(str(val))
             set_run_font(run, name=SONG, size=Pt(9))
             cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
-    # 列宽
+
     if col_widths:
         for j, w in enumerate(col_widths):
             for row in table.rows:
                 row.cells[j].width = w
-    # 表后空行
-    add_para(doc, '', space_after=Pt(8), line_spacing=1.0)
+
+    add_para_empty(doc)
     return table
 
 
-def set_cell_text(cell, text, bold=False, size=Pt(10.5), align=WD_ALIGN_PARAGRAPH.CENTER):
-    """设置答题纸表格单元格"""
-    cell.text = ''
-    p = cell.paragraphs[0]
-    p.alignment = align
-    p.paragraph_format.space_before = Pt(2)
-    p.paragraph_format.space_after = Pt(2)
-    run = p.add_run(text)
-    set_run_font(run, name=SONG, size=size, bold=bold)
-    cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+def add_para_empty(doc):
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(6)
+    p.paragraph_format.line_spacing = 1.0
 
 
 # ============================================================
-# 首页：答题纸
-# ============================================================
-def add_answer_sheet(doc):
-    """深圳大学考试答题纸首页"""
-    # 标题
-    p = add_para(doc, '深圳大学考试答题纸', size=Pt(16), bold=True, name=HEI,
-                 align=WD_ALIGN_PARAGRAPH.CENTER, space_before=Pt(20), space_after=Pt(2))
-    p = add_para(doc, '（以论文、报告等形式考核专用）', size=Pt(12), name=SONG,
-                 align=WD_ALIGN_PARAGRAPH.CENTER, space_after=Pt(10))
-
-    # 学年度信息
-    p = add_para(doc, '二零二五～二零二六学年度第二学期', size=Pt(10.5), name=SONG,
-                 align=WD_ALIGN_PARAGRAPH.CENTER, space_after=Pt(8))
-
-    # 信息表格
-    table = doc.add_table(rows=4, cols=4)
-    table.alignment = WD_TABLE_ALIGNMENT.CENTER
-    table.style = 'Table Grid'
-    col_w = [Cm(2.5), Cm(4), Cm(2.5), Cm(4)]
-    for j, w in enumerate(col_w):
-        for row in table.rows:
-            row.cells[j].width = w
-    # 第1行
-    set_cell_text(table.cell(0,0), '课程编号', bold=True)
-    set_cell_text(table.cell(0,1), '1303430001')
-    set_cell_text(table.cell(0,2), '课序号', bold=True)
-    set_cell_text(table.cell(0,3), '01')
-    # 第2行
-    set_cell_text(table.cell(1,0), '课程名称', bold=True)
-    set_cell_text(table.cell(1,1), '机器人学导论')
-    set_cell_text(table.cell(1,2), '主讲教师', bold=True)
-    set_cell_text(table.cell(1,3), '郑琪')
-    # 第3行
-    set_cell_text(table.cell(2,0), '学    号', bold=True)
-    set_cell_text(table.cell(2,1), '')
-    set_cell_text(table.cell(2,2), '评    分', bold=True)
-    set_cell_text(table.cell(2,3), '')
-    # 第4行
-    set_cell_text(table.cell(3,0), '姓    名', bold=True)
-    set_cell_text(table.cell(3,1), '')
-    set_cell_text(table.cell(3,2), '专业年级', bold=True)
-    set_cell_text(table.cell(3,3), '')
-
-    add_para(doc, '', space_after=Pt(6))
-
-    # 教师评语
-    p = add_para(doc, '教师评语：', size=Pt(10.5), name=SONG, space_before=Pt(6), space_after=Pt(4))
-    # 评语框
-    t2 = doc.add_table(rows=1, cols=1)
-    t2.style = 'Table Grid'
-    t2.alignment = WD_TABLE_ALIGNMENT.CENTER
-    t2.columns[0].width = Cm(15)
-    cell = t2.cell(0, 0)
-    cell.height = Cm(3)
-    set_cell_text(cell, '', align=WD_ALIGN_PARAGRAPH.LEFT)
-
-    add_para(doc, '', space_after=Pt(8))
-
-    # 题目
-    p = add_para(doc, '题目：', size=Pt(10.5), name=SONG, bold=True, space_before=Pt(6), space_after=Pt(4))
-
-    # 题目选项
-    topics = [
-        '五选一：',
-        'A. PyBullet移动机器人自主导航（也可以选择Isaac Sim）',
-        '    1）参考现实生活，在PyBullet仿真环境中构建一个仓库室内场景',
-        '    2）实现自主导航，基本功能：用鼠标在场景中选点，机器人能从当前位置导航到选定点（附近）',
-        'B. PyBullet机械臂抓取与运动规划',
-        '    要求在桌面上放置至少3种不同的物体和至少2个框，基本功能：',
-        '    接收命令行输入选择要抓取的物体和要放置的框，算法控制机械臂抓取指定的物体到指定的框',
-        'C. 复现开源的导航算法',
-        '    参考链接1: https://github.com/NJU-R-L-Group-Embodied-Lab/lavira-code',
-        '    参考链接2: https://github.com/sxyxs/SmartWay-Code',
-        '    参考链接3: https://github.com/LYX0501/InstructNav',
-        '    参考链接4: https://github.com/ylwhxht/MSGNav',
-        'D. 在校园里一个室内或室外场景进行SLAM位姿估计和建图，也可以跑公开数据集',
-        '    参考链接1: https://github.com/luigifreda/pyslam',
-        '    参考链接2: https://github.com/UZ-SLAMLab/ORB_SLAM3',
-        'E. 自拟选题，要求与3D视觉、导航相关，需提前与老师沟通确认选题，并在报告中阐述选题与本课程的相关性',
-    ]
-    for t in topics:
-        p = add_para(doc, t, size=Pt(10.5), name=SONG, space_after=Pt(2), line_spacing=1.4, indent_first=False)
-
-    # 选题声明
-    add_para(doc, '', space_after=Pt(10))
-    p = add_para(doc, '本组选题：C. 复现开源的导航算法 —— MSGNav', size=Pt(11), name=SONG,
-                 bold=True, space_before=Pt(8), space_after=Pt(4))
-    p = add_para(doc, '（参考链接4: https://github.com/ylwhxht/MSGNav）', size=Pt(10), name=SONG,
-                 space_after=Pt(4))
-
-    # 分页
-    doc.add_page_break()
-
-
-# ============================================================
-# 正文内容
+# 报告正文
 # ============================================================
 def add_report_body(doc):
     """课程报告正文"""
 
-    # 报告标题
-    add_para(doc, 'MSGNav：基于多模态3D场景图的零样本具身导航复现报告',
-             size=Pt(16), bold=True, name=HEI, align=WD_ALIGN_PARAGRAPH.CENTER,
-             space_before=Pt(10), space_after=Pt(4))
-    add_para(doc, 'Reproduction of "Unleashing the Power of Multi-modal 3D Scene Graph for Zero-Shot Embodied Navigation" (CVPR 2026)',
-             size=Pt(10.5), name='Times New Roman', italic=True,
-             align=WD_ALIGN_PARAGRAPH.CENTER, space_after=Pt(12))
+    # 报告标题（不使用Heading样式，避免出现在目录中）
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_before = Pt(10)
+    p.paragraph_format.space_after = Pt(4)
+    run = p.add_run('MSGNav：基于多模态3D场景图的零样本具身导航复现报告')
+    set_run_font(run, name=HEI, size=Pt(16), bold=True)
+
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_after = Pt(12)
+    run = p.add_run('Reproduction of "Unleashing the Power of Multi-modal 3D Scene Graph for Zero-Shot Embodied Navigation" (CVPR 2026)')
+    set_run_font(run, name='Times New Roman', size=Pt(10.5), italic=True)
 
     # 摘要
     add_heading3(doc, '摘  要')
@@ -304,7 +259,7 @@ def add_report_body(doc):
              '该方法无需任何导航训练，仅利用预训练的YOLO-World、SAM、CLIP模型构建3D场景图，并通过Qwen-VL-Max大模型进行导航决策。'
              '我们在GOAT-Bench基准上对5个HM3D场景共38个子任务进行了评估，总成功率达到68.42%，SPL为36.49。'
              '其中图像引导任务成功率最高（80%），描述类任务为瓶颈（53.85%）。本报告详细阐述了问题背景、算法流程、实验结果与性能分析，并总结复现经验。')
-    add_para(doc, '', space_after=Pt(8))
+    add_para_empty(doc)
 
     # ==================== 1. 问题背景及问题设定 ====================
     add_heading1(doc, '1  问题背景及问题设定')
@@ -326,14 +281,14 @@ def add_report_body(doc):
     add_table(doc,
               ['任务类型', '输入模态', '描述', '示例'],
               [['description', '自然语言文本', '用英文描述目标物体的类别、属性和空间位置',
-                'a round mirror above a white sink and beside a wooden cabinet'],
-               ['image', '参考图片', '提供目标物体的参考图像（跨场景同类物体）', 'JPEG图像'],
+                'a round mirror above a white sink'],
+               ['image', '参考图片', '提供目标物体的参考图像', 'JPEG图像'],
                ['object', '物体类别标签', '仅给定物体类别名称', 'refrigerator, chair, sofa']],
               col_widths=[Cm(2.5), Cm(2.5), Cm(4.5), Cm(5)])
 
     add_body(doc, '评估指标包括两个：成功率（Success Rate）和路径加权成功率（SPL）。'
              '成功率定义为智能体最终位置与目标物体距离小于0.25米的子任务比例；'
-             'SPL同时衡量成功性和路径最短性，其计算公式为SPL = S × L_opt / max(L_opt, L_actual)，'
+             'SPL同时衡量成功性和路径最短性，其计算公式为SPL = S * L_opt / max(L_opt, L_actual)，'
              '其中S为成功标志，L_opt为最短路径长度，L_actual为实际路径长度。')
 
     add_heading2(doc, '1.3  MSGNav核心创新')
@@ -467,7 +422,7 @@ def add_report_body(doc):
              '前沿区域分散，智能体需要更多步数才能覆盖整个空间，导致成功率下降。')
 
     add_heading2(doc, '3.5  图像引导任务分析')
-    add_body(doc, 'image任务是表现最好的任务类型。图6展示了两个图像引导任务的参考图片示例。')
+    add_body(doc, 'image任务是表现最好的任务类型。图6展示了图像引导任务的参考图片示例。')
 
     add_figure(doc, os.path.join(IMG_DIR, 'image_goal_example.png'),
                '图像引导任务参考图片示例', width=Cm(9))
@@ -482,8 +437,8 @@ def add_report_body(doc):
     add_table_caption(doc, '每步平均耗时分解（总计约104秒）')
     add_table(doc,
               ['阶段', '耗时(秒)', '占比(%)', '瓶颈分析'],
-              [['感知层（YOLO+SAM+CLIP）', '90.5', '87.0', 'I/O密集（200+张PNG写入）+ CPU特征计算'],
-               ['VLM API调用', '10.5', '10.1', '网络延迟 + API排队'],
+              [['感知层（YOLO+SAM+CLIP）', '90.5', '87.0', 'I/O密集+CPU特征计算'],
+               ['VLM API调用', '10.5', '10.1', '网络延迟+API排队'],
                ['TSDF路径规划', '2.6', '2.5', 'CPU密集（单线程）'],
                ['内存管理+前沿更新', '0.4', '0.4', '可忽略']],
               col_widths=[Cm(4), Cm(2), Cm(2), Cm(6)])
@@ -569,15 +524,19 @@ def add_report_body(doc):
 # 主函数
 # ============================================================
 def main():
-    doc = Document()
+    # 直接加载转换后的原始答题纸docx作为基础文档（保留原格式）
+    doc = Document(COVER_DOCX)
 
-    # 设置默认样式
-    style = doc.styles['Normal']
-    style.font.name = SONG
-    style.font.size = Pt(10.5)
-    style.element.rPr.rFonts.set(qn('w:eastAsia'), SONG)
+    # 配置Heading样式
+    setup_heading_styles(doc)
 
-    # 页面设置
+    # 设置Normal样式默认字体
+    normal = doc.styles['Normal']
+    normal.font.name = SONG
+    normal.font.size = Pt(10.5)
+    normal.element.rPr.rFonts.set(qn('w:eastAsia'), SONG)
+
+    # 页面设置（A4）
     for section in doc.sections:
         section.page_width = Cm(21)
         section.page_height = Cm(29.7)
@@ -586,10 +545,10 @@ def main():
         section.left_margin = Cm(2.5)
         section.right_margin = Cm(2.5)
 
-    # 首页：答题纸
-    add_answer_sheet(doc)
+    # 在封面后添加分页符
+    doc.add_page_break()
 
-    # 正文
+    # 添加报告正文
     add_report_body(doc)
 
     output_path = '/workspace/MSGNav_课程报告.docx'
